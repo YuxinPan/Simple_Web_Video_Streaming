@@ -191,7 +191,9 @@
   <div class="play-area-sub">
     <h3>View Stream</h3>
     <canvas id="capture" width="420" height="420"></canvas>
-    <div id="snapshot"></div>
+    <div id="snapshot">
+        <img id="pic" src="">
+    </div>
     <br>
     <div id="timestampIndicator"></div>
     <br>
@@ -270,15 +272,6 @@ function redirectStreamingPage() {
 }
 
 
-// load an image in background before displaying
-function preloadImage(img, resp, anImageLoadedCallback){ // download image from server before displaying
-
-    img.src = 'view.php?act=stream&f='+resp.name;
-    img.onload = anImageLoadedCallback;
-
-}
-
-
 // format time string
 function timeBreakout(inputTime) {
 
@@ -297,16 +290,24 @@ function timeBreakout(inputTime) {
 }
 
 
+// load an image in background before displaying
+function preloadImage(img, resp, anImageLoadedCallback){ // download image from server before displaying
+
+    // fix for Firefox flickering issue:
+    // https://stackoverflow.com/questions/14704796/image-reload-causes-flicker-only-in-firefox
+    img.onload = anImageLoadedCallback;
+    // set the source of the new image to trigger the load 
+    img.src = 'view.php?act=stream&f='+resp.name;
+
+}
+
+
 // view stream
 function viewStream() {
 
-
     let request = new XMLHttpRequest();
-
     request.open( "GET", "view.php?act=view&f="+String(currentFileTimestamp), async=true );
-
     request.timeout = xhrTimeout; // time in milliseconds
-
     request.send();
     
     request.onload = function() {
@@ -334,8 +335,9 @@ function viewStream() {
                     var img = new Image();
                     preloadImage(img, resp, function () { // don't write this as a separate callback function
 
-                        snapshot.innerHTML = '';
-                        snapshot.appendChild(img); // display image
+                        //snapshot.innerHTML = '';
+                        //snapshot.appendChild(img); // display image
+                        document.images["pic"].src = img.src; // replace the existing image once the new image has loaded
 
                         timestampIndicator.innerHTML = timeBreakout(respTimestamp);
 
