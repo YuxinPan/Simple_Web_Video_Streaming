@@ -12,7 +12,6 @@
     }
 
 
-
     // render the requested image
     if ((isset($_GET['act'])) &&($_GET['act'] == "stream")){ 
 
@@ -79,6 +78,7 @@
         }
         
         $datapath = 'data/';
+        $file_ext = ".jpg";
         $fileValidPeriod = 30*1000; // delete file after $fileValidPeriod seconds
         $requestTimeOut = 1500; // milliseconds, request wait for file to come up for this much time
         $loopSleepTime = 5; // milliseconds, wait before next round of research, not to overload server
@@ -90,17 +90,22 @@
         while ((round(microtime(true) * 1000)-$millitimestamp)<$requestTimeOut){ // request wait for file to come up 
         
             $allfiles = array_diff(scandir($datapath), array('.', '..','.htaccess','.ipynb_checkpoints'));
-            $timeCompare = 0;
             $streamFilename = '';
+            
+            $allfiles = array_map(function ($value) use($file_ext) { 
+                $filetimestamp = (int) filter_var(basename($value, $file_ext), FILTER_SANITIZE_NUMBER_INT);
+                if (is_numeric($filetimestamp)) 
+                    return $filetimestamp;
+                }, $allfiles);
+            $allfiles = array_filter($allfiles);
+            rsort($allfiles); // put the latest first
             foreach($allfiles as $value){
                 # if is the latest and if not empty file
-                if ( (is_numeric(basename($value, ".jpg")))
-                    &&(intval(basename($value, ".jpg"))>$timeCompare)                    // if is the newest in the folder
-                    &&(intval(basename($value, ".jpg"))>$millitimestamp-$fileValidPeriod)   // if within valid period
-                    &&(intval(basename($value, ".jpg"))>intval($_GET['f']))           // if file is more up-to-date than user's current one
-                    &&(filesize($datapath.$value)>1)){                                 // file not empty (being written to)
-                    $streamFilename = $value;
-                    $timeCompare = intval(basename($value, ".jpg"));
+                if (($value>$millitimestamp-$fileValidPeriod) // if within valid period
+                    &&($value>intval($_GET['f'])) // if file is more up-to-date than user's current one
+                    &&(filesize($datapath.$value.$file_ext)>1)){ // file not empty (not currently being written to)
+                    $streamFilename = $value.$file_ext;
+                    break; // break from loop when find one file (in an already reverse sorted array)
                 }
             }
             if ($streamFilename!=''){ // if at this moment, the newest file is found, then break while loop
