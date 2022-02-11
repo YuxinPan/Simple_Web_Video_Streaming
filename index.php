@@ -18,7 +18,7 @@
 
 
     // if the request is an API call to upload image
-    if ( (isset($_GET['act']))&&($_GET['act'] == "upload") ){
+    if ( (isset($_GET['act']))&&(isset($_GET['timestamp']))&&($_GET['act'] == "upload") ){
 
         $datapath = 'data/';
         $fileValidPeriod = 30*1000; // delete file after $fileValidPeriod milliseconds
@@ -27,17 +27,17 @@
         $fileType = $_FILES['image']['type'];
         $fileContent = file_get_contents($_FILES['image']['tmp_name']);
         $dataUrl = 'data:' . $fileType ;
-        $millitimestamp = round(microtime(true) * 1000);
+        $millitimestamp = (int) $_GET['timestamp'];
 
         // delete file if outdated
         $allfiles = array_diff(scandir($datapath), array('.', '..','.htaccess','.ipynb_checkpoints'));
-        foreach($allfiles as $value){
-            $filetimestamp = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT); // get integer from filename
-            if ((is_numeric($filetimestamp)) // if not empty
-                &&($filetimestamp<$millitimestamp-$fileValidPeriod)){ // if outdated
+        $filetimestamps = array_map(function ($value) use($millitimestamp,$fileValidPeriod,$datapath) { 
+            $filetimestamp = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
+            if ( (is_numeric($filetimestamp)) // if not empty
+                  && ($filetimestamp<$millitimestamp-$fileValidPeriod)){ // if outdated
                 unlink($datapath.$value);
-            }
-        }
+            } }, $allfiles);
+
 
         $f = file_put_contents($datapath.$millitimestamp.'.jpg',$fileContent); // remember to check folder permission
 
@@ -50,6 +50,7 @@
 
         echo $json;
         
+//         bring up machine learning inference (YOLO) if the inference process is not already on
 //         if (strpos(strval(shell_exec('ps -A')),'inference-sub') === false) {
 //             $full_output = shell_exec('nohup python3 /var/www/panyuxin.com/yolo/yolo.py > /dev/null 2>&1 &');
 //         }
@@ -166,11 +167,11 @@
 <div class="play-area">
   <div class="play-area-sub">
     <h3>Camera Stream</h3>
-    <video id="stream" width="320" height="320"></video>
+    <video id="stream" width="480" height="360"></video>
   </div>
     <br>
   <div class="play-area-sub">
-    <canvas id="capture" width="320" height="320"></canvas>
+    <canvas id="capture" width="480" height="360"></canvas>
     <div id="timestampIndicator"></div>
     <div id="snapshot"></div>
     
@@ -337,41 +338,6 @@ function timeBreakout(inputTime) {
 }
 
 
-// function dataURItoBlob( dataURI ) {
-//
-//     var byteString = atob( dataURI.split( ',' )[ 1 ] );
-//     var mimeString = dataURI.split( ',' )[ 0 ].split( ':' )[ 1 ].split( ';' )[ 0 ];
-//
-//     var buffer	= new ArrayBuffer( byteString.length );
-//     var data	= new DataView( buffer );
-//
-//     for( var i = 0; i < byteString.length; i++ ) {
-//
-//         data.setUint8( i, byteString.charCodeAt( i ) );
-//     }
-//
-//     return new Blob( [ buffer ], { type: mimeString } );
-// }
-
-//toBlob polyfill
-// if (!HTMLCanvasElement.prototype.toBlob) {
-//   Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
-//     value: function (callback, type, quality) {
-//       var dataURL = this.toDataURL(type, quality).split(',')[1];
-//       setTimeout(function() {
-//         var binStr = atob( dataURL ),
-//             len = binStr.length,
-//             arr = new Uint8Array(len);
-//         for (var i = 0; i < len; i++ ) {
-//           arr[i] = binStr.charCodeAt(i);
-//         }
-//         callback( new Blob( [arr], {type: type || 'image/png'} ) );
-//       });
-//     }
-//   });
-// }
-
-
 // start streaming by uploading camera images to server
 function startUploading() {
 
@@ -398,33 +364,6 @@ function captureSnapshot() {
 
         ctx.drawImage( stream, 0, 0, capture.width, capture.height );
         //ctx.drawImage( stream, 0, 0, stream.videoWidth, stream.videoHeight );
-
-//         img.src		= capture.toDataURL( "image/png" );
-//         //img.width	= stream.videoWidth;
-//         //img.height	= stream.videoHeight;
-
-//         snapshot.innerHTML = '';
-//         snapshot.appendChild( img ); // display captured image locally
-        
-        
-        
-        //**** send the image to server ****//
-//         var request = new XMLHttpRequest();
-
-//         request.open( "POST", "index.php?act=upload", true );
-        
-//         request.timeout = 5000; // time in milliseconds
-
-//         var data	= new FormData();
-//         var dataURI	= snapshot.firstChild.getAttribute( "src" );
-//         var imageData   = dataURItoBlob( dataURI );
-        //var imageData ; 
-
-        // toBlob usage
-//         ctx.canvas.toBlob(function (blob) {
-//          console.log(blob); //access blob here
-//             imageData = blob;
-//          }, 'image/png', 0.5);
         
         ctx.canvas.toBlob((blob) => {
             const file = new File([blob], 'myimage1', {
@@ -438,11 +377,8 @@ function captureSnapshot() {
 
 
             var request = new XMLHttpRequest();
-
-            request.open( "POST", "index.php?act=upload", true );
-
+            request.open( "POST", "index.php?act=upload&timestamp="+String(Date.now()), true );
             request.timeout = xhrTimeout; // time in milliseconds
-
 
             request.send( data );
 
@@ -464,7 +400,6 @@ function captureSnapshot() {
                         logTimeSpan = (logTimestamp[logTimestamp.length-1]-logTimestamp[0])/1000;
                         metricFrameRate.innerHTML = (logTimestamp.length/logTimeSpan).toFixed(2);
                     }
-
                     
                     let res = Array.from(data.entries(), ([key, prop]) => ( // get image size (content length)
                         {[key]: {
@@ -499,8 +434,7 @@ function captureSnapshot() {
     }
     else{
         alert( 'No video feed detected.' );
-    }  
-    
+    }
 }
 
 </script></body>
