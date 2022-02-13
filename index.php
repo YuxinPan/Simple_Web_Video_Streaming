@@ -197,29 +197,31 @@
     
 <script>
     
-
-var imageQuality = 0.85;                // stream image compression quality
-var xhrTimeout = 5000;                  // millisecond
-var logLength = 5;                      // log for streaming metrics
+const threadSeparation = 1000;          // millisecond, between invocation of each thread
+const xhrTimeout = 5000;                // millisecond
+const logLength = 5;                    // log for streaming metrics
 var streamThreadNum = 2;                // how many capture and upload threads
-var threadSeparationNumerator = 1000;   // millisecond, between invocation of each thread
+var imageQuality = 0.85;                // stream image compression quality
 
 var logTimestamp = [];                  // log of timestamp for frame rate analysis with the array length of logLength
 var logFileSize = [];                   // log of image file size for bit rate analysis with the array length of logLength
 
 
 // The buttons to start & stop stream and to capture the image
-var btnStart = document.getElementById( "btn-start" );
-var btnStop = document.getElementById( "btn-stop" );
-var btnCapture = document.getElementById( "btn-capture" );
-var btnView = document.getElementById( "btn-view" );
+var btnStart = document.getElementById( "btn-start" );     // start camera
+var btnStop = document.getElementById( "btn-stop" );       // stop camera
+var btnCapture = document.getElementById( "btn-capture" ); // start uploading
+var btnView = document.getElementById( "btn-view" );       // redirect to viewer page
+
+// no stop or stream option when camera not started at first
+btnStop.style.display = "none";
+btnCapture.style.display = "none";
 
     
 // The stream & capture
 var stream = document.getElementById( "stream" );
 var capture = document.getElementById( "capture" );
 var snapshot = document.getElementById( "snapshot" );
-
 
 // slider for thread selection
 var slider = document.getElementById("sliderRange");
@@ -245,15 +247,16 @@ slider2.oninput = function() {
 // The video stream
 var cameraStream = null;
 
-// Attach listeners
-btnStart.addEventListener( "click", startStreaming );
-btnStop.addEventListener( "click", stopStreaming );
-btnCapture.addEventListener( "click", startUploading );
-btnView.addEventListener( "click", viewStream );
 
-// no stop or stream option when camera not started at first
-document.getElementById("btn-stop").style.display = "none";
-document.getElementById("btn-capture").style.display = "none";
+$( document ).ready(function() {
+    
+    // Attach listeners
+    btnStart.addEventListener( "click", startStreaming );
+    btnStop.addEventListener( "click", stopStreaming );
+    btnCapture.addEventListener( "click", startUploading );
+    btnView.addEventListener( "click", viewStream );
+
+});
 
 
 // Start local camera, not uploading yet
@@ -265,7 +268,7 @@ function startStreaming() {
 
     let mediaSupport = 'mediaDevices' in navigator;
 
-    if( mediaSupport && null == cameraStream ) {
+    if( mediaSupport && cameraStream == null ) {
 
         navigator.mediaDevices.getUserMedia( { video: true } )
         .then( function( mediaStream ) {
@@ -282,7 +285,7 @@ function startStreaming() {
 
 
     }
-    else if (null != cameraStream){
+    else if (cameraStream != null){
 
         alert( 'Device is already streaming.' );
 
@@ -349,7 +352,7 @@ function startUploading() {
     let separation = 0;
     for( let i = 0; i < streamThreadNum; i++ ) {
         setTimeout("captureSnapshot()", separation);
-        separation += threadSeparationNumerator/streamThreadNum;
+        separation += threadSeparation/streamThreadNum;
     }
 
 }
@@ -357,13 +360,11 @@ function startUploading() {
 
 function captureSnapshot() {
 
-    if( null != cameraStream ) {
+    if(cameraStream != null) {
 
-        var ctx = capture.getContext( '2d' );
-        var img = new Image();
+        let ctx = capture.getContext( '2d' );
 
-        ctx.drawImage( stream, 0, 0, capture.width, capture.height );
-        //ctx.drawImage( stream, 0, 0, stream.videoWidth, stream.videoHeight );
+        ctx.drawImage(stream, 0, 0, capture.width, capture.height);
         
         ctx.canvas.toBlob((blob) => {
             const file = new File([blob], 'myimage1', {
@@ -389,8 +390,8 @@ function captureSnapshot() {
                 } 
                 else {
 
-                    var resp = JSON.parse(request.response);
-                    var receiveTime = parseInt(resp.time,10);
+                    let resp = JSON.parse(request.response);
+                    let receiveTime = parseInt(resp.time,10);
                     timestampIndicator.innerHTML = timeBreakout(parseInt(resp.time,10));
                     
                     logTimestamp.push(receiveTime);
@@ -430,7 +431,6 @@ function captureSnapshot() {
 
         }, 'image/jpeg', imageQuality);
         
-        
     }
     else{
         alert( 'No video feed detected.' );
@@ -439,4 +439,3 @@ function captureSnapshot() {
 
 </script></body>
 </html>
-    

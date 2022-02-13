@@ -245,15 +245,17 @@ var btnStart = document.getElementById( "btn-start" );
 var btnStop = document.getElementById( "btn-stop" );
 var btnStreaming = document.getElementById( "btn-streaming" );
 
-
-
-// Attach listeners
-btnStart.addEventListener( "click", startStream );
-btnStop.addEventListener( "click", stopStreaming );
-btnStreaming.addEventListener( "click", redirectStreamingPage );
-
 document.getElementById("btn-stop").style.display = "none"; // hide stop button
 
+
+$( document ).ready(function() {
+    
+    // Attach listeners
+    btnStart.addEventListener( "click", startStream );
+    btnStop.addEventListener( "click", stopStreaming );
+    btnStreaming.addEventListener( "click", redirectStreamingPage );
+
+});
 
 
 // Detect user browser type
