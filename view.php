@@ -180,6 +180,7 @@
       /*width: 300px;
       height: 300px;*/
     }
+
 </style>
 
 <body>
@@ -195,7 +196,8 @@
 <div class="play-area">
   <div class="play-area-sub">
     <h3>View Stream</h3>
-    <canvas id="capture" width="420" height="420"></canvas>
+    <!-- size setting here has no effect, depending on image size -->
+    <!-- <canvas id="capture" width="480" height="360"></canvas> -->
     <div id="snapshot">
         <img id="pic" src="">
     </div>
@@ -223,11 +225,17 @@
 
 <script>
     
-var requestInterval = 5000; // polling rate when no streaming available
-var xhrTimeout = 6000; // millisecond
-var logLength = 6;
-var emptyTransferSize = 9; // kB, the extra http image request size (transfer size on top of image size)
+const requestInterval = 5000; // polling rate when no streaming available
+const xhrTimeout = 6000; // millisecond
+const logLength = 6;
+const emptyTransferSize = 9; // kB, the extra http image request size (transfer size on top of image size)
+const detectedBrowser = fnBrowserDetect();
+const borderWidth = 40; // border between image feed and window edge
+const capture_width = 480;
+const capture_height = 360;
+var display_width, display_height;
 
+// console.log(detectedBrowser);
 
 var currentFileTimestamp = 0;
 var logTimestamp = []; // log of timestamp for frame rate analysis with the array length of logLength
@@ -238,30 +246,73 @@ var btnStop = document.getElementById( "btn-stop" );
 var btnStreaming = document.getElementById( "btn-streaming" );
 
 
+
 // Attach listeners
 btnStart.addEventListener( "click", startStream );
 btnStop.addEventListener( "click", stopStreaming );
 btnStreaming.addEventListener( "click", redirectStreamingPage );
 
-document.getElementById("btn-stop").style.display = "none";
+document.getElementById("btn-stop").style.display = "none"; // hide stop button
 
+
+
+// Detect user browser type
+function fnBrowserDetect() {
+                 
+    let userAgent = navigator.userAgent;
+    let browserName;
+
+    if(userAgent.match(/chrome|chromium|crios/i)){
+        browserName = "chrome";
+    }else if(userAgent.match(/firefox|fxios/i)){
+        browserName = "firefox";
+    }  else if(userAgent.match(/safari/i)){
+        browserName = "safari";
+    }else if(userAgent.match(/opr\//i)){
+        browserName = "opera";
+    } else if(userAgent.match(/edg/i)){
+        browserName = "edge";
+    }else{
+        browserName="No match";
+    }
+
+    return browserName;
+
+}
 
 
 // Start Streaming
 function startStream() {
 
+    // show stop button, hide stop button
     document.getElementById("btn-start").style.display = "none";
     document.getElementById("btn-stop").style.display = "inline";
 
+    // set a predefined image snapshot size
+    let snapshot_pic = document.getElementById('pic');
+    if (window.innerWidth<capture_width+borderWidth) {
+        display_width = window.innerWidth-borderWidth;
+        display_height = (window.innerWidth-borderWidth)/capture_width*capture_height;
+        snapshot_pic.width = display_width;
+        snapshot_pic.height = display_height;
+    }
+    else {
+        display_width = capture_width;
+        display_height = capture_height;
+        snapshot_pic.width = display_width;
+        snapshot_pic.height = display_height;
+    }
+
+    // start multiple function "threads" in polling newest image 
     setTimeout("viewStream()",0);
     setTimeout("viewStream()",500);
     setTimeout("viewStream()",1000);
-    setTimeout("viewStream()",1500);
+    // setTimeout("viewStream()",1500);
 
 }
 
 
-// Stop Streaming
+// Stop streaming by redirecting to the same page
 function stopStreaming() {
 
     window.location.replace("./view.php");
@@ -291,7 +342,8 @@ function timeBreakout(inputTime) {
     let sec = dateObj.getSeconds();
     let formattedTime = year + '-' + month + '-' + date + '  ' + hour + ':' + min + ':' + sec ;
 
-    return formattedTime
+    return formattedTime;
+    
 }
 
 
@@ -330,7 +382,7 @@ function viewStream() {
 
             if (resp.status=='Success'){
 
-                if (respTimestamp<=currentFileTimestamp){
+                if (respTimestamp<=currentFileTimestamp){ // if this file timestamp has already been returned
                     setTimeout("viewStream()", 0);
                 }
                 else {
@@ -340,10 +392,16 @@ function viewStream() {
                     var img = new Image();
                     preloadImage(img, resp, function () { // don't write this as a separate callback function
 
-                        //snapshot.innerHTML = '';
-                        //snapshot.appendChild(img); // display image
-                        document.images["pic"].src = img.src; // replace the existing image once the new image has loaded
-
+                        // this is required due to firefox image flickering issue
+                        if (detectedBrowser=="firefox") { // this will be slow for Chrome but not Firefox
+                            document.images["pic"].src = img.src; // replace the existing image once the new image has loaded
+                        }
+                        else { // this method does not introduce slow down for Chrome
+                            snapshot.innerHTML = '';
+                            img.style.width = display_width; // need to resize image again since it was cleared
+                            img.style.height = display_height;
+                            snapshot.appendChild(img); // display image
+                        }
                         timestampIndicator.innerHTML = timeBreakout(respTimestamp);
 
                         logTimestamp.push(respTimestamp);
@@ -390,7 +448,6 @@ function viewStream() {
         // XMLHttpRequest timed out.
         setTimeout("viewStream()", 0);
     };
-     
 
 }
 
