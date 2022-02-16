@@ -93,7 +93,7 @@
             $streamFilename = '';
             
             $allfiles = array_map(function ($value) use($file_ext) { 
-                $filetimestamp = (int) filter_var(basename($value, $file_ext), FILTER_SANITIZE_NUMBER_INT);
+                $filetimestamp = basename($value, $file_ext);
                 if (is_numeric($filetimestamp)) 
                     return $filetimestamp;
                 }, $allfiles);
@@ -103,6 +103,7 @@
                 # if is the latest and if not empty file
                 if (($value>$millitimestamp-$fileValidPeriod) // if within valid period
                     &&($value>intval($_GET['f'])) // if file is more up-to-date than user's current one
+                    &&(file_exists($datapath.$value.$file_ext))
                     &&(filesize($datapath.$value.$file_ext)>1)){ // file not empty (not currently being written to)
                     $streamFilename = $value.$file_ext;
                     break; // break from loop when find one file (in an already reverse sorted array)

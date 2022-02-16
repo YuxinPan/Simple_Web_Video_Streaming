@@ -22,7 +22,8 @@
 
         $datapath = 'data/';
         $fileValidPeriod = 30*1000; // delete file after $fileValidPeriod milliseconds
-
+        $file_ext = ".jpg";
+        
         $fileName = $_FILES['image']['name'];
         $fileType = $_FILES['image']['type'];
         $fileContent = file_get_contents($_FILES['image']['tmp_name']);
@@ -31,10 +32,11 @@
 
         // delete file if outdated
         $allfiles = array_diff(scandir($datapath), array('.', '..','.htaccess','.ipynb_checkpoints'));
-        $filetimestamps = array_map(function ($value) use($millitimestamp,$fileValidPeriod,$datapath) { 
-            $filetimestamp = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
-            if ( (is_numeric($filetimestamp)) // if not empty
-                  && ($filetimestamp<$millitimestamp-$fileValidPeriod)){ // if outdated
+        $filetimestamps = array_map(function ($value) use($millitimestamp,$fileValidPeriod,$datapath,$file_ext) { 
+            $filetimestamp = basename($value, $file_ext); // file basename should also be a timestamp
+            if (  (is_numeric($filetimestamp)) // if not empty
+                &&(file_exists($datapath.$value))
+                && ($filetimestamp<$millitimestamp-$fileValidPeriod)){ // if outdated
                 unlink($datapath.$value);
             } }, $allfiles);
 
