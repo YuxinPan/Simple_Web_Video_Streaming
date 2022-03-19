@@ -225,6 +225,9 @@ var stream = document.getElementById( "stream" );
 var capture = document.getElementById( "capture" );
 var snapshot = document.getElementById( "snapshot" );
 
+var video_config = document.getElementById("stream"); // for Safari Iphone compatibility   
+video_config.setAttribute("playsinline", true);
+
 // slider for thread selection
 var slider = document.getElementById("sliderRange");
 var output = document.getElementById("sliderValue");
