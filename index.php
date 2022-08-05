@@ -18,26 +18,28 @@
 
 
     // if the request is an API call to upload image
-    if ( (isset($_GET['act']))&&($_GET['act'] == "upload") ){
+    if ( (isset($_GET['act']))&&(isset($_GET['timestamp']))&&($_GET['act'] == "upload") ){
 
         $datapath = 'data/';
         $fileValidPeriod = 30*1000; // delete file after $fileValidPeriod milliseconds
-
+        $file_ext = ".jpg";
+        
         $fileName = $_FILES['image']['name'];
         $fileType = $_FILES['image']['type'];
         $fileContent = file_get_contents($_FILES['image']['tmp_name']);
         $dataUrl = 'data:' . $fileType ;
-        $millitimestamp = round(microtime(true) * 1000);
+        $millitimestamp = (int) $_GET['timestamp'];
 
         // delete file if outdated
         $allfiles = array_diff(scandir($datapath), array('.', '..','.htaccess','.ipynb_checkpoints'));
-        foreach($allfiles as $value){
-            $filetimestamp = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT); // get integer from filename
-            if ((is_numeric($filetimestamp)) // if not empty
-                &&($filetimestamp<$millitimestamp-$fileValidPeriod)){ // if outdated
+        $filetimestamps = array_map(function ($value) use($millitimestamp,$fileValidPeriod,$datapath,$file_ext) { 
+            $filetimestamp = basename($value, $file_ext); // file basename should also be a timestamp
+            if (  (is_numeric($filetimestamp)) // if not empty
+                &&(file_exists($datapath.$value))
+                && ($filetimestamp<$millitimestamp-$fileValidPeriod)){ // if outdated
                 unlink($datapath.$value);
-            }
-        }
+            } }, $allfiles);
+
 
         $f = file_put_contents($datapath.$millitimestamp.'.jpg',$fileContent); // remember to check folder permission
 
@@ -50,6 +52,7 @@
 
         echo $json;
         
+//         bring up machine learning inference (YOLO) if the inference process is not already on
 //         if (strpos(strval(shell_exec('ps -A')),'inference-sub') === false) {
 //             $full_output = shell_exec('nohup python3 /var/www/panyuxin.com/yolo/yolo.py > /dev/null 2>&1 &');
 //         }
@@ -166,11 +169,11 @@
 <div class="play-area">
   <div class="play-area-sub">
     <h3>Camera Stream</h3>
-    <video id="stream" width="320" height="320"></video>
+    <video id="stream" width="480" height="360"></video>
   </div>
     <br>
   <div class="play-area-sub">
-    <canvas id="capture" width="320" height="320"></canvas>
+    <canvas id="capture" width="480" height="360"></canvas>
     <div id="timestampIndicator"></div>
     <div id="snapshot"></div>
     
@@ -196,22 +199,25 @@
     
 <script>
     
-
-var imageQuality = 0.85;                // stream image compression quality
-var xhrTimeout = 5000;                  // millisecond
-var logLength = 5;                      // log for streaming metrics
+const threadSeparation = 1000;          // millisecond, between invocation of each thread
+const xhrTimeout = 5000;                // millisecond
+const logLength = 5;                    // log for streaming metrics
 var streamThreadNum = 2;                // how many capture and upload threads
-var threadSeparationNumerator = 1000;   // millisecond, between invocation of each thread
+var imageQuality = 0.85;                // stream image compression quality
 
 var logTimestamp = [];                  // log of timestamp for frame rate analysis with the array length of logLength
 var logFileSize = [];                   // log of image file size for bit rate analysis with the array length of logLength
 
 
 // The buttons to start & stop stream and to capture the image
-var btnStart = document.getElementById( "btn-start" );
-var btnStop = document.getElementById( "btn-stop" );
-var btnCapture = document.getElementById( "btn-capture" );
-var btnView = document.getElementById( "btn-view" );
+var btnStart = document.getElementById( "btn-start" );     // start camera
+var btnStop = document.getElementById( "btn-stop" );       // stop camera
+var btnCapture = document.getElementById( "btn-capture" ); // start uploading
+var btnView = document.getElementById( "btn-view" );       // redirect to viewer page
+
+// no stop or stream option when camera not started at first
+btnStop.style.display = "none";
+btnCapture.style.display = "none";
 
     
 // The stream & capture
@@ -219,6 +225,8 @@ var stream = document.getElementById( "stream" );
 var capture = document.getElementById( "capture" );
 var snapshot = document.getElementById( "snapshot" );
 
+var video_config = document.getElementById("stream"); // for Safari Iphone compatibility   
+video_config.setAttribute("playsinline", true);
 
 // slider for thread selection
 var slider = document.getElementById("sliderRange");
@@ -244,15 +252,16 @@ slider2.oninput = function() {
 // The video stream
 var cameraStream = null;
 
-// Attach listeners
-btnStart.addEventListener( "click", startStreaming );
-btnStop.addEventListener( "click", stopStreaming );
-btnCapture.addEventListener( "click", startUploading );
-btnView.addEventListener( "click", viewStream );
 
-// no stop or stream option when camera not started at first
-document.getElementById("btn-stop").style.display = "none";
-document.getElementById("btn-capture").style.display = "none";
+$( document ).ready(function() {
+    
+    // Attach listeners
+    btnStart.addEventListener( "click", startStreaming );
+    btnStop.addEventListener( "click", stopStreaming );
+    btnCapture.addEventListener( "click", startUploading );
+    btnView.addEventListener( "click", viewStream );
+
+});
 
 
 // Start local camera, not uploading yet
@@ -264,7 +273,7 @@ function startStreaming() {
 
     let mediaSupport = 'mediaDevices' in navigator;
 
-    if( mediaSupport && null == cameraStream ) {
+    if( mediaSupport && cameraStream == null ) {
 
         navigator.mediaDevices.getUserMedia( { video: true } )
         .then( function( mediaStream ) {
@@ -281,7 +290,7 @@ function startStreaming() {
 
 
     }
-    else if (null != cameraStream){
+    else if (cameraStream != null){
 
         alert( 'Device is already streaming.' );
 
@@ -337,41 +346,6 @@ function timeBreakout(inputTime) {
 }
 
 
-// function dataURItoBlob( dataURI ) {
-//
-//     var byteString = atob( dataURI.split( ',' )[ 1 ] );
-//     var mimeString = dataURI.split( ',' )[ 0 ].split( ':' )[ 1 ].split( ';' )[ 0 ];
-//
-//     var buffer	= new ArrayBuffer( byteString.length );
-//     var data	= new DataView( buffer );
-//
-//     for( var i = 0; i < byteString.length; i++ ) {
-//
-//         data.setUint8( i, byteString.charCodeAt( i ) );
-//     }
-//
-//     return new Blob( [ buffer ], { type: mimeString } );
-// }
-
-//toBlob polyfill
-// if (!HTMLCanvasElement.prototype.toBlob) {
-//   Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
-//     value: function (callback, type, quality) {
-//       var dataURL = this.toDataURL(type, quality).split(',')[1];
-//       setTimeout(function() {
-//         var binStr = atob( dataURL ),
-//             len = binStr.length,
-//             arr = new Uint8Array(len);
-//         for (var i = 0; i < len; i++ ) {
-//           arr[i] = binStr.charCodeAt(i);
-//         }
-//         callback( new Blob( [arr], {type: type || 'image/png'} ) );
-//       });
-//     }
-//   });
-// }
-
-
 // start streaming by uploading camera images to server
 function startUploading() {
 
@@ -383,7 +357,7 @@ function startUploading() {
     let separation = 0;
     for( let i = 0; i < streamThreadNum; i++ ) {
         setTimeout("captureSnapshot()", separation);
-        separation += threadSeparationNumerator/streamThreadNum;
+        separation += threadSeparation/streamThreadNum;
     }
 
 }
@@ -391,40 +365,11 @@ function startUploading() {
 
 function captureSnapshot() {
 
-    if( null != cameraStream ) {
+    if(cameraStream != null) {
 
-        var ctx = capture.getContext( '2d' );
-        var img = new Image();
+        let ctx = capture.getContext( '2d' );
 
-        ctx.drawImage( stream, 0, 0, capture.width, capture.height );
-        //ctx.drawImage( stream, 0, 0, stream.videoWidth, stream.videoHeight );
-
-//         img.src		= capture.toDataURL( "image/png" );
-//         //img.width	= stream.videoWidth;
-//         //img.height	= stream.videoHeight;
-
-//         snapshot.innerHTML = '';
-//         snapshot.appendChild( img ); // display captured image locally
-        
-        
-        
-        //**** send the image to server ****//
-//         var request = new XMLHttpRequest();
-
-//         request.open( "POST", "index.php?act=upload", true );
-        
-//         request.timeout = 5000; // time in milliseconds
-
-//         var data	= new FormData();
-//         var dataURI	= snapshot.firstChild.getAttribute( "src" );
-//         var imageData   = dataURItoBlob( dataURI );
-        //var imageData ; 
-
-        // toBlob usage
-//         ctx.canvas.toBlob(function (blob) {
-//          console.log(blob); //access blob here
-//             imageData = blob;
-//          }, 'image/png', 0.5);
+        ctx.drawImage(stream, 0, 0, capture.width, capture.height);
         
         ctx.canvas.toBlob((blob) => {
             const file = new File([blob], 'myimage1', {
@@ -438,11 +383,8 @@ function captureSnapshot() {
 
 
             var request = new XMLHttpRequest();
-
-            request.open( "POST", "index.php?act=upload", true );
-
+            request.open( "POST", "index.php?act=upload&timestamp="+String(Date.now()), true );
             request.timeout = xhrTimeout; // time in milliseconds
-
 
             request.send( data );
 
@@ -453,8 +395,8 @@ function captureSnapshot() {
                 } 
                 else {
 
-                    var resp = JSON.parse(request.response);
-                    var receiveTime = parseInt(resp.time,10);
+                    let resp = JSON.parse(request.response);
+                    let receiveTime = parseInt(resp.time,10);
                     timestampIndicator.innerHTML = timeBreakout(parseInt(resp.time,10));
                     
                     logTimestamp.push(receiveTime);
@@ -464,7 +406,6 @@ function captureSnapshot() {
                         logTimeSpan = (logTimestamp[logTimestamp.length-1]-logTimestamp[0])/1000;
                         metricFrameRate.innerHTML = (logTimestamp.length/logTimeSpan).toFixed(2);
                     }
-
                     
                     let res = Array.from(data.entries(), ([key, prop]) => ( // get image size (content length)
                         {[key]: {
@@ -495,14 +436,11 @@ function captureSnapshot() {
 
         }, 'image/jpeg', imageQuality);
         
-        
     }
     else{
         alert( 'No video feed detected.' );
-    }  
-    
+    }
 }
 
 </script></body>
 </html>
-    

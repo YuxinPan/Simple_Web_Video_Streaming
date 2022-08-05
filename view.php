@@ -12,7 +12,6 @@
     }
 
 
-
     // render the requested image
     if ((isset($_GET['act'])) &&($_GET['act'] == "stream")){ 
 
@@ -79,6 +78,7 @@
         }
         
         $datapath = 'data/';
+        $file_ext = ".jpg";
         $fileValidPeriod = 30*1000; // delete file after $fileValidPeriod seconds
         $requestTimeOut = 1500; // milliseconds, request wait for file to come up for this much time
         $loopSleepTime = 5; // milliseconds, wait before next round of research, not to overload server
@@ -90,17 +90,23 @@
         while ((round(microtime(true) * 1000)-$millitimestamp)<$requestTimeOut){ // request wait for file to come up 
         
             $allfiles = array_diff(scandir($datapath), array('.', '..','.htaccess','.ipynb_checkpoints'));
-            $timeCompare = 0;
             $streamFilename = '';
+            
+            $allfiles = array_map(function ($value) use($file_ext) { 
+                $filetimestamp = basename($value, $file_ext);
+                if (is_numeric($filetimestamp)) 
+                    return $filetimestamp;
+                }, $allfiles);
+            $allfiles = array_filter($allfiles);
+            rsort($allfiles); // put the latest first
             foreach($allfiles as $value){
                 # if is the latest and if not empty file
-                if ( (is_numeric(basename($value, ".jpg")))
-                    &&(intval(basename($value, ".jpg"))>$timeCompare)                    // if is the newest in the folder
-                    &&(intval(basename($value, ".jpg"))>$millitimestamp-$fileValidPeriod)   // if within valid period
-                    &&(intval(basename($value, ".jpg"))>intval($_GET['f']))           // if file is more up-to-date than user's current one
-                    &&(filesize($datapath.$value)>1)){                                 // file not empty (being written to)
-                    $streamFilename = $value;
-                    $timeCompare = intval(basename($value, ".jpg"));
+                if (($value>$millitimestamp-$fileValidPeriod) // if within valid period
+                    &&($value>intval($_GET['f'])) // if file is more up-to-date than user's current one
+                    &&(file_exists($datapath.$value.$file_ext))
+                    &&(filesize($datapath.$value.$file_ext)>1)){ // file not empty (not currently being written to)
+                    $streamFilename = $value.$file_ext;
+                    break; // break from loop when find one file (in an already reverse sorted array)
                 }
             }
             if ($streamFilename!=''){ // if at this moment, the newest file is found, then break while loop
@@ -175,6 +181,7 @@
       /*width: 300px;
       height: 300px;*/
     }
+
 </style>
 
 <body>
@@ -190,8 +197,11 @@
 <div class="play-area">
   <div class="play-area-sub">
     <h3>View Stream</h3>
-    <canvas id="capture" width="420" height="420"></canvas>
-    <div id="snapshot"></div>
+    <!-- size setting here has no effect, depending on image size -->
+    <!-- <canvas id="capture" width="480" height="360"></canvas> -->
+    <div id="snapshot">
+        <img id="pic" src="">
+    </div>
     <br>
     <div id="timestampIndicator"></div>
     <br>
@@ -216,11 +226,17 @@
 
 <script>
     
-var requestInterval = 5000; // polling rate when no streaming available
-var xhrTimeout = 6000; // millisecond
-var logLength = 6;
-var emptyTransferSize = 9; // kB, the extra http image request size (transfer size on top of image size)
+const requestInterval = 5000; // polling rate when no streaming available
+const xhrTimeout = 6000; // millisecond
+const logLength = 6;
+const emptyTransferSize = 9; // kB, the extra http image request size (transfer size on top of image size)
+const detectedBrowser = fnBrowserDetect();
+const borderWidth = 40; // border between image feed and window edge
+const capture_width = 480;
+const capture_height = 360;
+var display_width, display_height;
 
+// console.log(detectedBrowser);
 
 var currentFileTimestamp = 0;
 var logTimestamp = []; // log of timestamp for frame rate analysis with the array length of logLength
@@ -230,31 +246,76 @@ var btnStart = document.getElementById( "btn-start" );
 var btnStop = document.getElementById( "btn-stop" );
 var btnStreaming = document.getElementById( "btn-streaming" );
 
+document.getElementById("btn-stop").style.display = "none"; // hide stop button
 
-// Attach listeners
-btnStart.addEventListener( "click", startStream );
-btnStop.addEventListener( "click", stopStreaming );
-btnStreaming.addEventListener( "click", redirectStreamingPage );
 
-document.getElementById("btn-stop").style.display = "none";
+$( document ).ready(function() {
+    
+    // Attach listeners
+    btnStart.addEventListener( "click", startStream );
+    btnStop.addEventListener( "click", stopStreaming );
+    btnStreaming.addEventListener( "click", redirectStreamingPage );
 
+});
+
+
+// Detect user browser type
+function fnBrowserDetect() {
+                 
+    let userAgent = navigator.userAgent;
+    let browserName;
+
+    if(userAgent.match(/chrome|chromium|crios/i)){
+        browserName = "chrome";
+    }else if(userAgent.match(/firefox|fxios/i)){
+        browserName = "firefox";
+    }  else if(userAgent.match(/safari/i)){
+        browserName = "safari";
+    }else if(userAgent.match(/opr\//i)){
+        browserName = "opera";
+    } else if(userAgent.match(/edg/i)){
+        browserName = "edge";
+    }else{
+        browserName="No match";
+    }
+
+    return browserName;
+
+}
 
 
 // Start Streaming
 function startStream() {
 
+    // show stop button, hide stop button
     document.getElementById("btn-start").style.display = "none";
     document.getElementById("btn-stop").style.display = "inline";
 
+    // set a predefined image snapshot size
+    let snapshot_pic = document.getElementById('pic');
+    if (window.innerWidth<capture_width+borderWidth) {
+        display_width = window.innerWidth-borderWidth;
+        display_height = (window.innerWidth-borderWidth)/capture_width*capture_height;
+        snapshot_pic.width = display_width;
+        snapshot_pic.height = display_height;
+    }
+    else {
+        display_width = capture_width;
+        display_height = capture_height;
+        snapshot_pic.width = display_width;
+        snapshot_pic.height = display_height;
+    }
+
+    // start multiple function "threads" in polling newest image 
     setTimeout("viewStream()",0);
     setTimeout("viewStream()",500);
     setTimeout("viewStream()",1000);
-    setTimeout("viewStream()",1500);
+    // setTimeout("viewStream()",1500);
 
 }
 
 
-// Stop Streaming
+// Stop streaming by redirecting to the same page
 function stopStreaming() {
 
     window.location.replace("./view.php");
@@ -266,15 +327,6 @@ function stopStreaming() {
 function redirectStreamingPage() {
 
     window.location.replace("./");
-
-}
-
-
-// load an image in background before displaying
-function preloadImage(img, resp, anImageLoadedCallback){ // download image from server before displaying
-
-    img.src = 'view.php?act=stream&f='+resp.name;
-    img.onload = anImageLoadedCallback;
 
 }
 
@@ -293,20 +345,29 @@ function timeBreakout(inputTime) {
     let sec = dateObj.getSeconds();
     let formattedTime = year + '-' + month + '-' + date + '  ' + hour + ':' + min + ':' + sec ;
 
-    return formattedTime
+    return formattedTime;
+    
+}
+
+
+// load an image in background before displaying
+function preloadImage(img, resp, anImageLoadedCallback){ // download image from server before displaying
+
+    // fix for Firefox flickering issue:
+    // https://stackoverflow.com/questions/14704796/image-reload-causes-flicker-only-in-firefox
+    img.onload = anImageLoadedCallback;
+    // set the source of the new image to trigger the load 
+    img.src = 'view.php?act=stream&f='+resp.name;
+
 }
 
 
 // view stream
 function viewStream() {
 
-
     let request = new XMLHttpRequest();
-
     request.open( "GET", "view.php?act=view&f="+String(currentFileTimestamp), async=true );
-
     request.timeout = xhrTimeout; // time in milliseconds
-
     request.send();
     
     request.onload = function() {
@@ -324,7 +385,7 @@ function viewStream() {
 
             if (resp.status=='Success'){
 
-                if (respTimestamp<=currentFileTimestamp){
+                if (respTimestamp<=currentFileTimestamp){ // if this file timestamp has already been returned
                     setTimeout("viewStream()", 0);
                 }
                 else {
@@ -334,9 +395,16 @@ function viewStream() {
                     var img = new Image();
                     preloadImage(img, resp, function () { // don't write this as a separate callback function
 
-                        snapshot.innerHTML = '';
-                        snapshot.appendChild(img); // display image
-
+                        // this is required due to firefox image flickering issue
+                        if (detectedBrowser=="firefox") { // this will be slow for Chrome but not Firefox
+                            document.images["pic"].src = img.src; // replace the existing image once the new image has loaded
+                        }
+                        else { // this method does not introduce slow down for Chrome
+                            snapshot.innerHTML = '';
+                            img.style.width = display_width; // need to resize image again since it was cleared
+                            img.style.height = display_height;
+                            snapshot.appendChild(img); // display image
+                        }
                         timestampIndicator.innerHTML = timeBreakout(respTimestamp);
 
                         logTimestamp.push(respTimestamp);
@@ -383,7 +451,6 @@ function viewStream() {
         // XMLHttpRequest timed out.
         setTimeout("viewStream()", 0);
     };
-     
 
 }
 
