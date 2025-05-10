@@ -256,69 +256,96 @@
     </div>
     
     <script>
-        const threadSeparation = 1000;          // millisecond, between invocation of each thread
-        const xhrTimeout = 5000;                // millisecond
-        const logLength = 5;                    // log for streaming metrics
-        let streamThreadNum = 2;                // how many capture and upload threads
-        let imageQuality = 0.85;                // stream image compression quality
+        // Config object
+        const CONFIG = {
+            threadSeparation: 1000,          // millisecond, between invocation of each thread
+            xhrTimeout: 5000,                // millisecond
+            logLength: 5,                    // log for streaming metrics
+            defaultThreadNum: 2,             // initial thread count
+            defaultQuality: 0.85             // initial image quality
+        };
 
+        // DOM elements
+        const DOM = {
+            btn: {
+                start: document.getElementById("btn-start"),
+                stop: document.getElementById("btn-stop"),
+                capture: document.getElementById("btn-capture"),
+                view: document.getElementById("btn-view")
+            },
+            stream: document.getElementById("stream"),
+            canvas: document.getElementById("capture"),
+            snapshot: document.getElementById("snapshot"),
+            sliders: {
+                threads: document.getElementById("sliderRange"),
+                threadValue: document.getElementById("sliderValue"),
+                quality: document.getElementById("sliderRange2"),
+                qualityValue: document.getElementById("sliderValue2")
+            },
+            metrics: {
+                timestampIndicator: document.getElementById("timestampIndicator"),
+                frameRate: document.getElementById("metricFrameRate"),
+                bitRate: document.getElementById("metricBitRate")
+            }
+        };
+
+        // Variables that can be modified during runtime
+        let streamThreadNum = CONFIG.defaultThreadNum;       // how many capture and upload threads
+        let imageQuality = CONFIG.defaultQuality;            // stream image compression quality
+
+        // Stream state tracking
         let logTimestamp = [];                  // log of timestamp for frame rate analysis with the array length of logLength
         let logFileSize = [];                   // log of image file size for bit rate analysis with the array length of logLength
+        let cameraStream = null;                // The video stream
 
-        // The buttons to start & stop stream and to capture the image
-        const btnStart = document.getElementById("btn-start");     // start camera
-        const btnStop = document.getElementById("btn-stop");       // stop camera
-        const btnCapture = document.getElementById("btn-capture"); // start uploading
-        const btnView = document.getElementById("btn-view");       // redirect to viewer page
-
-        // no stop or stream option when camera not started at first
-        btnStop.style.display = "none";
-        btnCapture.style.display = "none";
-            
-        // The stream & capture
-        const stream = document.getElementById("stream");
-        const capture = document.getElementById("capture");
-        const snapshot = document.getElementById("snapshot");
-
-        const video_config = document.getElementById("stream"); // for Safari Iphone compatibility   
-        video_config.setAttribute("playsinline", true);
-
-        // slider for thread selection
-        const slider = document.getElementById("sliderRange");
-        const output = document.getElementById("sliderValue");
-        output.innerHTML = slider.value;
-
-        slider.oninput = function() {
-            output.innerHTML = this.value;
-            streamThreadNum = this.value;
-        }
-
-        // slider for streaming image quality
-        const slider2 = document.getElementById("sliderRange2");
-        const output2 = document.getElementById("sliderValue2");
-        output2.innerHTML = slider2.value;
-
-        slider2.oninput = function() {
-            output2.innerHTML = this.value;
-            imageQuality = this.value/100;
-        }
-         
-        // The video stream
-        let cameraStream = null;
-
+        // Initial setup when document is ready
         $(document).ready(function() {
-            // Attach listeners
-            btnStart.addEventListener("click", startStreaming);
-            btnStop.addEventListener("click", stopStreaming);
-            btnCapture.addEventListener("click", startUploading);
-            btnView.addEventListener("click", viewStream);
+            initializeUI();
+            setupSliders();
+            attachEventListeners();
         });
+
+        // Initialize the UI
+        function initializeUI() {
+            // no stop or stream option when camera not started at first
+            DOM.btn.stop.style.display = "none";
+            DOM.btn.capture.style.display = "none";
+            
+            // for Safari Iphone compatibility
+            DOM.stream.setAttribute("playsinline", true);
+        }
+
+        // Set up the sliders
+        function setupSliders() {
+            // Initialize slider values
+            DOM.sliders.threadValue.innerHTML = DOM.sliders.threads.value;
+            DOM.sliders.qualityValue.innerHTML = DOM.sliders.quality.value;
+            
+            // Slider input handlers
+            DOM.sliders.threads.oninput = function() {
+                DOM.sliders.threadValue.innerHTML = this.value;
+                streamThreadNum = this.value;
+            }
+            
+            DOM.sliders.quality.oninput = function() {
+                DOM.sliders.qualityValue.innerHTML = this.value;
+                imageQuality = this.value/100;
+            }
+        }
+
+        // Attach event listeners
+        function attachEventListeners() {
+            DOM.btn.start.addEventListener("click", startStreaming);
+            DOM.btn.stop.addEventListener("click", stopStreaming);
+            DOM.btn.capture.addEventListener("click", startUploading);
+            DOM.btn.view.addEventListener("click", viewStream);
+        }
 
         // Start local camera, not uploading yet
         function startStreaming() {
-            document.getElementById("btn-stop").style.display = "inline";
-            document.getElementById("btn-capture").style.display = "inline";
-            document.getElementById("btn-start").style.display = "none";
+            DOM.btn.stop.style.display = "inline";
+            DOM.btn.capture.style.display = "inline";
+            DOM.btn.start.style.display = "none";
 
             let mediaSupport = 'mediaDevices' in navigator;
 
@@ -326,8 +353,8 @@
                 navigator.mediaDevices.getUserMedia({ video: true })
                 .then(function(mediaStream) {
                     cameraStream = mediaStream;
-                    stream.srcObject = mediaStream;
-                    stream.play();
+                    DOM.stream.srcObject = mediaStream;
+                    DOM.stream.play();
                 })
                 .catch(function(err) {
                     console.log("Unable to access camera: " + err);
@@ -346,25 +373,13 @@
         // Stop Streaming
         function stopStreaming() {
             window.location.replace("./");
-
-            // if( null != cameraStream ) {
-            //
-            //     var track = cameraStream.getTracks()[ 0 ];
-            //
-            //     track.stop();
-            //     stream.load();
-            //
-            //     cameraStream = null;
-            //
-            //     window.location.replace("./");
-            //
-            // }
         }
 
         function viewStream() {
             window.location.replace("./view.php");
         }
 
+        // Format time string
         function timeBreakout(inputTime) {
             let dateObj = new Date(inputTime);
 
@@ -380,40 +395,83 @@
             return formattedTime;
         }
 
-        // start streaming by uploading camera images to server
+        // Update metrics with new data
+        function updateMetrics(timestamp, fileSize, displayRounding) {
+            logTimestamp.push(timestamp);
+            let logTimeSpan;
+            
+            if (logTimestamp.length > CONFIG.logLength) {
+                logTimestamp.shift(); // Remove an item from the beginning of an array
+                logTimeSpan = (logTimestamp[logTimestamp.length-1] - logTimestamp[0]) / 1000;
+                DOM.metrics.frameRate.innerHTML = (logTimestamp.length/logTimeSpan).toFixed(displayRounding);
+            }
+            
+            logFileSize.push(fileSize);
+            if (logFileSize.length > CONFIG.logLength) {
+                logFileSize.shift(); // Remove an item from the beginning of an array
+                let sum = 0;
+                for (let i = 0; i < logFileSize.length; i++) {
+                    sum += parseInt(logFileSize[i], 10); //don't forget to add the base
+                }
+                DOM.metrics.bitRate.innerHTML = (sum/1000/logTimeSpan).toFixed(displayRounding);
+            }
+        }
+
+        // Start streaming by uploading camera images to server
         function startUploading() {
             // no longer allow change of value
-            document.getElementById("sliderRange").style.display = "none";
-            document.getElementById("sliderRange2").style.display = "none";
-            document.getElementById("btn-capture").style.display = "none";
+            DOM.sliders.threads.style.display = "none";
+            DOM.sliders.quality.style.display = "none";
+            DOM.btn.capture.style.display = "none";
 
             let separation = 0;
             for (let i = 0; i < streamThreadNum; i++) {
                 setTimeout("captureSnapshot()", separation);
-                separation += threadSeparation/streamThreadNum;
+                separation += CONFIG.threadSeparation/streamThreadNum;
             }
+        }
+
+        // Create a file from a canvas blob
+        function createFileFromBlob(blob) {
+            return new File([blob], 'myimage1', {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+            });
+        }
+
+        // Process the capture response
+        function processCaptureResponse(resp, data, displayRounding) {
+            let receiveTime = parseInt(resp.time, 10);
+            DOM.metrics.timestampIndicator.innerHTML = timeBreakout(parseInt(resp.time, 10));
+            
+            let res = Array.from(data.entries(), ([key, prop]) => ( // get image size (content length)
+                {[key]: {
+                    "ContentLength": 
+                    typeof prop === "string" 
+                    ? prop.length 
+                    : prop.size
+                }
+            }));
+            
+            updateMetrics(receiveTime, res[0]['image']['ContentLength'], displayRounding);
         }
 
         function captureSnapshot() {
             let displayRounding = 1;
 
             if (cameraStream != null) {
-                let ctx = capture.getContext('2d');
+                let ctx = DOM.canvas.getContext('2d');
 
-                ctx.drawImage(stream, 0, 0, capture.width, capture.height);
+                ctx.drawImage(DOM.stream, 0, 0, DOM.canvas.width, DOM.canvas.height);
                 
                 ctx.canvas.toBlob((blob) => {
-                    const file = new File([blob], 'myimage1', {
-                        type: 'image/jpeg',
-                        lastModified: Date.now()
-                    });
-
+                    const file = createFileFromBlob(blob);
                     var data = new FormData();
                     data.append("image", file, "streamIMG");
 
                     var request = new XMLHttpRequest();
                     request.open("POST", "index.php?act=upload&timestamp=" + String(Date.now()), true);
-                    request.timeout = xhrTimeout; // time in milliseconds
+                    request.timeout = CONFIG.xhrTimeout; // time in milliseconds
 
                     request.send(data);
 
@@ -424,41 +482,12 @@
                         } 
                         else {
                             let resp = JSON.parse(request.response);
-                            let receiveTime = parseInt(resp.time, 10);
-                            timestampIndicator.innerHTML = timeBreakout(parseInt(resp.time, 10));
-                            
-                            logTimestamp.push(receiveTime);
-                            let logTimeSpan;
-                            if (logTimestamp.length > logLength) {
-                                logTimestamp.shift(); // Remove an item from the beginning of an array
-                                logTimeSpan = (logTimestamp[logTimestamp.length-1] - logTimestamp[0]) / 1000;
-                                metricFrameRate.innerHTML = (logTimestamp.length/logTimeSpan).toFixed(displayRounding);
-                            }
-                            
-                            let res = Array.from(data.entries(), ([key, prop]) => ( // get image size (content length)
-                                {[key]: {
-                                    "ContentLength": 
-                                    typeof prop === "string" 
-                                    ? prop.length 
-                                    : prop.size
-                                }
-                            }));
-
-                            logFileSize.push(res[0]['image']['ContentLength']);
-                            if (logFileSize.length > logLength) {
-                                logFileSize.shift(); // Remove an item from the beginning of an array
-                                let sum = 0;
-                                for (let i = 0; i < logFileSize.length; i++) {
-                                    sum += parseInt(logFileSize[i], 10); //don't forget to add the base
-                                }
-                                metricBitRate.innerHTML = (sum/1000/logTimeSpan).toFixed(displayRounding);
-                            }
-
+                            processCaptureResponse(resp, data, displayRounding);
                             setTimeout("captureSnapshot()", 0);
                         }
                     };
                     
-                    request.ontimeout = function(e) {
+                    request.ontimeout = function (e) {
                         // XMLHttpRequest timed out.
                         setTimeout("captureSnapshot()", 0);
                     };

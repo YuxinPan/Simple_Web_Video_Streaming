@@ -320,34 +320,60 @@
     </div>
     
     <script>
-        const requestInterval = 5000; // polling rate when no streaming available
-        const xhrTimeout = 6000; // millisecond
-        const logLength = 6;
-        const emptyTransferSize = 9; // kB, the extra http image request size (transfer size on top of image size)
-        const detectedBrowser = fnBrowserDetect();
-        const borderWidth = 40; // border between image feed and window edge
-        const capture_width = 480;
-        const capture_height = 360;
+        // Config object
+        const CONFIG = {
+            requestInterval: 5000, // polling rate when no streaming available
+            xhrTimeout: 6000, // millisecond
+            logLength: 6,
+            emptyTransferSize: 9, // kB, the extra http image request size (transfer size on top of image size)
+            borderWidth: 40, // border between image feed and window edge
+            capture_width: 480,
+            capture_height: 360
+        };
+
+        // DOM elements
+        const DOM = {
+            btn: {
+                start: document.getElementById("btn-start"),
+                stop: document.getElementById("btn-stop"),
+                streaming: document.getElementById("btn-streaming")
+            },
+            snapshot: document.getElementById("snapshot"),
+            pic: document.getElementById("pic"),
+            timestampIndicator: document.getElementById("timestampIndicator"),
+            metrics: {
+                frameRate: document.getElementById("metricFrameRate"),
+                bitRate: document.getElementById("metricBitRate")
+            }
+        };
+
         let display_width, display_height;
 
-        // console.log(detectedBrowser);
-
+        // Stream state
         let currentFileTimestamp = 0;
         let logTimestamp = []; // log of timestamp for frame rate analysis with the array length of logLength
         let logFileSize = []; // log of image file size for bit rate analysis with the array length of logLength
 
-        const btnStart = document.getElementById("btn-start");
-        const btnStop = document.getElementById("btn-stop");
-        const btnStreaming = document.getElementById("btn-streaming");
+        // Initialize browser detection
+        const detectedBrowser = fnBrowserDetect();
 
-        document.getElementById("btn-stop").style.display = "none"; // hide stop button
-
+        // Initial setup when document is ready
         $(document).ready(function() {
-            // Attach listeners
-            btnStart.addEventListener("click", startStream);
-            btnStop.addEventListener("click", stopStreaming);
-            btnStreaming.addEventListener("click", redirectStreamingPage);
+            initializeUI();
+            attachEventListeners();
         });
+
+        // Initialize the UI
+        function initializeUI() {
+            DOM.btn.stop.style.display = "none"; // hide stop button
+        }
+
+        // Attach event listeners
+        function attachEventListeners() {
+            DOM.btn.start.addEventListener("click", startStream);
+            DOM.btn.stop.addEventListener("click", stopStreaming);
+            DOM.btn.streaming.addEventListener("click", redirectStreamingPage);
+        }
 
         // Detect user browser type
         function fnBrowserDetect() {
@@ -371,31 +397,63 @@
             return browserName;
         }
 
+        // Update metrics with new data
+        function updateMetrics(timestamp, fileSize, displayRounding) {
+            logTimestamp.push(timestamp);
+
+            if (logTimestamp.length > CONFIG.logLength) {
+                logTimestamp.shift(); // Remove an item from the beginning of an array
+            }
+            
+            let logTimeSpan = (logTimestamp[logTimestamp.length - 1] - logTimestamp[0]) / 1000;
+            if (logTimeSpan > 0) {
+                DOM.metrics.frameRate.innerHTML = (logTimestamp.length / logTimeSpan).toFixed(displayRounding);
+            }
+
+            logFileSize.push(fileSize);
+            if (logFileSize.length > CONFIG.logLength) {
+                logFileSize.shift(); // Remove an item from the beginning of an array
+            }
+            
+            let sum = 0;
+            for (let i = 0; i < logFileSize.length; i++) {
+                sum += parseInt(logFileSize[i], 10); //don't forget to add the base
+            }
+            
+            if (logTimeSpan > 0) {
+                DOM.metrics.bitRate.innerHTML = (sum / logTimeSpan).toFixed(displayRounding);
+            }
+        }
+
         // Start Streaming
         function startStream() {
             // show stop button, hide stop button
-            document.getElementById("btn-start").style.display = "none";
-            document.getElementById("btn-stop").style.display = "inline";
+            DOM.btn.start.style.display = "none";
+            DOM.btn.stop.style.display = "inline";
 
             // set a predefined image snapshot size
-            let snapshot_pic = document.getElementById('pic');
-            if (window.innerWidth < capture_width + borderWidth) {
-                display_width = window.innerWidth - borderWidth;
-                display_height = (window.innerWidth - borderWidth) / capture_width * capture_height;
-                snapshot_pic.width = display_width;
-                snapshot_pic.height = display_height;
-            } else {
-                display_width = capture_width;
-                display_height = capture_height;
-                snapshot_pic.width = display_width;
-                snapshot_pic.height = display_height;
-            }
+            setImageSize();
 
             // start multiple function "threads" in polling newest image 
             setTimeout("viewStream()", 0);
             setTimeout("viewStream()", 500);
             setTimeout("viewStream()", 1000);
             // setTimeout("viewStream()",1500);
+        }
+
+        // Set the snapshot image size based on window width
+        function setImageSize() {
+            if (window.innerWidth < CONFIG.capture_width + CONFIG.borderWidth) {
+                display_width = window.innerWidth - CONFIG.borderWidth;
+                display_height = (window.innerWidth - CONFIG.borderWidth) / CONFIG.capture_width * CONFIG.capture_height;
+                DOM.pic.width = display_width;
+                DOM.pic.height = display_height;
+            } else {
+                display_width = CONFIG.capture_width;
+                display_height = CONFIG.capture_height;
+                DOM.pic.width = display_width;
+                DOM.pic.height = display_height;
+            }
         }
 
         // Stop streaming by redirecting to the same page
@@ -432,12 +490,26 @@
             img.src = 'view.php?act=stream&f=' + resp.name;
         }
 
+        // Display image based on browser type
+        function displayImage(img, respTimestamp) {
+            // this is required due to firefox image flickering issue
+            if (detectedBrowser == "firefox") { // this will be slow for Chrome but not Firefox
+                document.images["pic"].src = img.src; // replace the existing image once the new image has loaded
+            } else { // this method does not introduce slow down for Chrome
+                DOM.snapshot.innerHTML = '';
+                img.style.width = display_width; // need to resize image again since it was cleared
+                img.style.height = display_height;
+                DOM.snapshot.appendChild(img); // display image
+            }
+            DOM.timestampIndicator.innerHTML = timeBreakout(respTimestamp);
+        }
+
         // view stream
         function viewStream() {
             let displayRounding = 1;
             let request = new XMLHttpRequest();
             request.open("GET", "view.php?act=view&f=" + String(currentFileTimestamp), async = true);
-            request.timeout = xhrTimeout; // time in milliseconds
+            request.timeout = CONFIG.xhrTimeout; // time in milliseconds
             request.send();
             
             request.onload = function() {
@@ -446,7 +518,6 @@
                     setTimeout("viewStream()", 0);
                 } else {
                     let resp = JSON.parse(request.response);
-                    //var img = new Image();
                     let dispTime = resp.name.substring(resp.name.indexOf('/') + 1, resp.name.indexOf('.'));
                     let respTimestamp = parseInt(dispTime, 10);
 
@@ -458,49 +529,16 @@
 
                             var img = new Image();
                             preloadImage(img, resp, function() { // don't write this as a separate callback function
-                                // this is required due to firefox image flickering issue
-                                if (detectedBrowser == "firefox") { // this will be slow for Chrome but not Firefox
-                                    document.images["pic"].src = img.src; // replace the existing image once the new image has loaded
-                                } else { // this method does not introduce slow down for Chrome
-                                    snapshot.innerHTML = '';
-                                    img.style.width = display_width; // need to resize image again since it was cleared
-                                    img.style.height = display_height;
-                                    snapshot.appendChild(img); // display image
-                                }
-                                timestampIndicator.innerHTML = timeBreakout(respTimestamp);
-
-                                logTimestamp.push(respTimestamp);
-
-                                //console.log(logTimestamp);
-                                if (logTimestamp.length > logLength) {
-                                    logTimestamp.shift(); // Remove an item from the beginning of an array
-                                }
-                                let logTimeSpan = (logTimestamp[logTimestamp.length - 1] - logTimestamp[0]) / 1000;
-                                if (logTimeSpan > 0) {
-                                    metricFrameRate.innerHTML = (logTimestamp.length / logTimeSpan).toFixed(displayRounding);
-                                }
-
-                                logFileSize.push(resp.size / 1000 + emptyTransferSize);
-                                if (logFileSize.length > logLength) {
-                                    logFileSize.shift(); // Remove an item from the beginning of an array
-                                }
-                                let sum = 0;
-                                logTimeSpan = (logTimestamp[logTimestamp.length - 1] - logTimestamp[0]) / 1000;
-
-                                for (let i = 0; i < logFileSize.length; i++) {
-                                    sum += parseInt(logFileSize[i], 10); //don't forget to add the base
-                                }
-                                if (logTimeSpan > 0) {
-                                    metricBitRate.innerHTML = (sum / logTimeSpan).toFixed(displayRounding);
-                                }
+                                displayImage(img, respTimestamp);
+                                updateMetrics(respTimestamp, resp.size / 1000 + CONFIG.emptyTransferSize, displayRounding);
                                 setTimeout("viewStream()", 0);
                             });
                         }
                     } else if (resp.status == 'No update') {
                         setTimeout("viewStream()", 0);
                     } else {
-                        snapshot.innerHTML = 'No Streaming available.';
-                        setTimeout("viewStream()", requestInterval); // reduce polling rate when no streaming available
+                        DOM.snapshot.innerHTML = 'No Streaming available.';
+                        setTimeout("viewStream()", CONFIG.requestInterval); // reduce polling rate when no streaming available
                     }
                 }
             };
