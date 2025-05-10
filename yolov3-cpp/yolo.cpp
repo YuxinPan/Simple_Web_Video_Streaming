@@ -1,10 +1,10 @@
 /****
 
 Compile using the following command:
-g++-9 -std=c++17 /root/YOLO/yolov3-cpp/date/src/tz.cpp \
-/root/YOLO/yolov3-cpp/yolo.cpp -o /root/YOLO/yolov3-cpp/yolo \
+g++-9 -std=c++17 path/to/date/src/tz.cpp \
+path/to/yolov3-cpp/yolo.cpp -o path/to/yolov3-cpp/yolo \
 `pkg-config --cflags --libs opencv4` \
--I/root/YOLO/yolov3-cpp/date/include/  -lcurl
+-Ipath/to/date/include/  -lcurl
 
 ****/
 
@@ -43,9 +43,9 @@ struct YoloConfig {
     int cacheOutputNum = 500;      // cache output detected file numbers
     int sleep_interval = 100;      // sleep after one inference, in ms
     
-    std::string pathNN = "/root/YOLO/yolov3-cpp/";
-    std::string pathImage = "/var/www/apps.panyuxin.com/public_html/streaming/data/";
-    std::string pathOutput = "/var/www/panyuxin.com/public_html/cloud/share/detection/";
+    std::string pathNN = "path/to/yolov3-cpp/";
+    std::string pathImage = "path/to/data/";
+    std::string pathOutput = "path/to/detection/";
     
     // Classes of interest
     std::vector<std::string> interestClasses = {"cat", "person", "dog"};
