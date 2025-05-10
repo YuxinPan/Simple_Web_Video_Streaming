@@ -264,7 +264,8 @@
             xhrTimeout: 5000,                // millisecond
             logLength: 5,                    // log for streaming metrics
             defaultThreadNum: 2,             // initial thread count
-            defaultQuality: 0.85             // initial image quality
+            defaultQuality: 0.85,            // initial image quality
+            errorBackoffTime: 1000           // backoff time in ms when error occurs
         };
 
         // DOM elements
@@ -480,7 +481,8 @@
                     request.onload = function() {
                         if (request.status != 200) { 
                             // analyze HTTP status of the response
-                            setTimeout("captureSnapshot()", 0);
+                            // Use backoff time for error retries
+                            setTimeout("captureSnapshot()", CONFIG.errorBackoffTime);
                         } 
                         else {
                             let resp = JSON.parse(request.response);
@@ -491,7 +493,8 @@
                     
                     request.ontimeout = function (e) {
                         // XMLHttpRequest timed out.
-                        setTimeout("captureSnapshot()", 0);
+                        // Use backoff time for timeout retries
+                        setTimeout("captureSnapshot()", CONFIG.errorBackoffTime);
                     };
                 }, 'image/jpeg', imageQuality);
             }
