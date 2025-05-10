@@ -2,14 +2,16 @@
     
     // <!-- https://html5.tutorials24x7.com/blog/how-to-capture-image-from-camera -->
     
-    include_once '../login/serviceServer.php';
+    // include_once '../login/serviceServer.php';
 
-    // auth check
+    // auth check - commented out for public release
+    /*
     $user = new authMaintainer();
     if (!($user->statusCheck())) {
         header("Location: https://" . join(DIRECTORY_SEPARATOR, array($config['SSOdomain'], $config['SSOrootPath'], $config['SSOerrPath'])));
         die();
     }
+    */
 
     // render the requested image
     if ((isset($_GET['act'])) && ($_GET['act'] == "stream")) { 
@@ -162,11 +164,11 @@
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <title>View Streaming - Yuxin Pan</title>
-    <link rel="shortcut icon" href="https://www.panyuxin.com/favicon.ico">
+    <title>Simple Web Video Streaming - Viewer</title>
+    <link rel="shortcut icon" href="assets/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, minimum-scale=1.0">
     
-    <script src="https://www.panyuxin.com/assets/js/jquery.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="assets/custom.js"></script>
     <link rel="stylesheet" href="assets/custom.css">
     

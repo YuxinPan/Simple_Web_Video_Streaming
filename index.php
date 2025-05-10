@@ -4,17 +4,19 @@
     // https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Taking_still_photos
     
     
-    include_once '../login/serviceServer.php';
+    // include_once '../login/serviceServer.php';
 
-    // auth check
+    // auth check - commented out for public release
+    /*
     $user = new authMaintainer();
     if (!($user->statusCheck())) {
-        $query = array( // no need to configure this for new SSO service server
+        $query = array(
             'service' => $_SERVER['HTTP_HOST']
         );
         header("Location: https://" . join(DIRECTORY_SEPARATOR, array($config['SSOdomain'], $config['SSOrootPath'])) . "?" . http_build_query($query));        
         die();
     }
+    */
 
 
     // if the request is an API call to upload image
@@ -55,7 +57,7 @@
         
         // bring up machine learning inference (YOLO) if the inference process is not already on
         // if (strpos(strval(shell_exec('ps -A')),'inference-sub') === false) {
-        //     $full_output = shell_exec('nohup python3 /var/www/panyuxin.com/yolo/yolo.py > /dev/null 2>&1 &');
+        //     $full_output = shell_exec('nohup python3 path/to/yolo.py > /dev/null 2>&1 &');
         // }
 
         die();
@@ -66,12 +68,12 @@
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <title>Streaming - Yuxin Pan</title>
-    <link rel="shortcut icon" href="https://www.panyuxin.com/favicon.ico">
+    <title>Simple Web Video Streaming</title>
+    <link rel="shortcut icon" href="assets/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, minimum-scale=1.0">
 
     
-    <script src="https://www.panyuxin.com/assets/js/jquery.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="assets/custom.js"></script>
     <link rel="stylesheet" href="assets/custom.css">
 
