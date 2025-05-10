@@ -12,10 +12,13 @@ g++-9 -std=c++17 /root/YOLO/yolov3-cpp/date/src/tz.cpp \
 #include <sstream>
 #include <iostream>
 #include <chrono>
-#include <ctime>    
+#include <ctime>
 #include <thread>
 #include <filesystem>
 #include <unistd.h>
+#include <vector>
+#include <string>
+#include <algorithm>
 
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
@@ -29,22 +32,22 @@ using namespace dnn;
 
 
 // Initialize the parameters
-constexpr float confThreshold = 0.31; // Confidence threshold
+constexpr float confThreshold = 0.365; // Confidence threshold, 0.31 for person
 constexpr float nmsThreshold = 0.30;  // Non-maximum suppression threshold
-constexpr int inpWidth = 416;         // Width of network's input image
-constexpr int inpHeight = 416;        // Height of network's input image
-constexpr int nicePriority = 10;      // nice value for the process
-constexpr int cacheOutputNum = 50;    // cache output detected file numbers
-auto sleep_interval = 100;   // sleep after one inference, in ms
+constexpr int inpWidth = 416;        // Width of network's input image
+constexpr int inpHeight = 416;       // Height of network's input image
+constexpr int nicePriority = 10;     // nice value for the process
+constexpr int cacheOutputNum = 500;    // cache output detected file numbers
+auto sleep_interval = 100;  // sleep after one inference, in ms
 std::vector<std::string> classes;
 std::string pathNN = "/root/YOLO/yolov3-cpp/",
-    pathImage  = "/var/www/apps.panyuxin.com/public_html/streaming/data/",
-    pathOutput = "/var/www/panyuxin.com/public_html/cloud/share/detection/",
-    interestClass = "person";
+     pathImage  = "/var/www/apps.panyuxin.com/public_html/streaming/data/",
+     pathOutput = "/var/www/panyuxin.com/public_html/cloud/share/detection/";
+std::vector<std::string> interestClasses = {"cat", "person", "dog"}; // person, cat, dog
 
 
 // Remove the bounding boxes with low confidence using non-maxima suppression
-bool postprocess(Mat &frame, const std::vector<Mat> &out, const std::string& interestClass);
+bool postprocess(Mat &frame, const std::vector<Mat> &out, const std::vector<std::string>& interestClasses); // Changed signature
 
 // Draw the predicted bounding box
 void drawPred(int classId, float conf, int left, int top, int right, int bottom, Mat &frame);
@@ -56,11 +59,11 @@ std::vector<std::string> getOutputsNames(const Net &net);
 int main()
 {
     nice(nicePriority);
-        
+
     // Load names of classes
-    std::string line, 
-        classesFile = pathNN + "coco.names", 
-        device = "cpu", 
+    std::string line,
+        classesFile = pathNN + "coco.names",
+        device = "cpu",
         lastFile = "",
         imgExt = ".jpg";
     std::ifstream ifs(classesFile.c_str());
@@ -81,14 +84,14 @@ int main()
         std::string outputFile;
         Mat frame, blob;
         clock_t time_1 = clock(), time_2, time_3;
-        
+
         try
         {
             long int newestTimestamp = 0;
             for (const auto & entry : std::filesystem::directory_iterator(pathImage)) {
                 std::filesystem::path p(entry.path());
                 std::string fileBasename = p.stem();
-                if ( (std::all_of(fileBasename.begin(), fileBasename.end(), isdigit)) &&
+                if ( (std::all_of(fileBasename.begin(), fileBasename.end(), ::isdigit)) && // Use ::isdigit
                      (p.extension() == imgExt) ){
                     if ( newestTimestamp < std::stol(fileBasename) ) {
                         newestTimestamp = std::stol(fileBasename);
@@ -108,7 +111,7 @@ int main()
             if (!ifile) {
                 throw("Error loading input file.");
             }
-            
+
             frame = imread(outputFile);
             // outputFile.replace(outputFile.end() - 4, outputFile.end(), "_yolo_out.jpg");
 
@@ -128,10 +131,10 @@ int main()
             net.forward(outs, getOutputsNames(net));
 
             // Remove the bounding boxes with low confidence
-            bool foundObject = postprocess(frame, outs, interestClass);
+            bool foundObject = postprocess(frame, outs, interestClasses); // Pass the vector
 
-            // Put efficiency information. 
-            // The function getPerfProfile returns the overall time for inference(t) 
+            // Put efficiency information.
+            // The function getPerfProfile returns the overall time for inference(t)
             // and the timings for each of the layers(in layersTimes)
             std::vector<double> layersTimes;
             double freq = getTickFrequency() / 1000;
@@ -149,54 +152,58 @@ int main()
                 // char buff[20];
                 // std::time_t now = time(NULL);
                 // std::strftime(buff, 20, "%Y-%m-%d %H-%M-%S", std::localtime(&now));
-                // std::to_string(newestTimestamp) 
-                
+                // std::to_string(newestTimestamp)
+
                 // EST EDT time using the date library
                 // floor() to milliseconds because formatting second decimal places is not supported
                 auto time_now = date::make_zoned("EST5EDT", std::chrono::floor<std::chrono::milliseconds>(
-                                                            std::chrono::system_clock::now()));
-                
+                                                std::chrono::system_clock::now()));
+
                 outputFile = pathOutput + format("%F %H:%M:%S %Z", time_now) + imgExt;
 
                 Mat detectedFrame;
                 frame.convertTo(detectedFrame, CV_8U);
                 imwrite(outputFile, detectedFrame); // Write the frame with the detection boxes
-                
+
                 // delete old cache files if existing file number larger than cacheOutputNum
                 std::vector<std::string> allOutputFiles; // all images in the output folder
                 for (const auto & entry : std::filesystem::directory_iterator(pathOutput)) {
                     std::filesystem::path p(entry.path());
                     if (p.extension() == imgExt){
-                        allOutputFiles.push_back(p.filename());
+                        allOutputFiles.push_back(p.filename().string()); // Use .string()
                     }
                 }
                 if (allOutputFiles.size()>cacheOutputNum) { // if too many cache files
                     std::sort(allOutputFiles.begin(), allOutputFiles.end());
-                    for (int i = 0; i < (allOutputFiles.size()-cacheOutputNum); ++i) {
+                    for (size_t i = 0; i < (allOutputFiles.size()-cacheOutputNum); ++i) { // Use size_t for index
                         std::string fileToDelete = pathOutput + allOutputFiles.front();
                         std::filesystem::path p(fileToDelete);
                         try {
-                            if (!std::filesystem::remove(fileToDelete)) // try to delete file
-                                std::cout << "Output file not found: " << p.filename() << std::endl;
+                            if (!std::filesystem::remove(p)) // Pass path object
+                                std::cout << "Output file not found: " << p.filename().string() << std::endl;
                             }
                         catch(const std::filesystem::filesystem_error& err) { // if delete file error
-                            std::cout << "Delete file error: " << err.what() << "\nwhen deleting " << p.filename();
+                            std::cout << "Delete file error: " << err.what() << "\nwhen deleting " << p.filename().string();
                         }
                         allOutputFiles.erase(allOutputFiles.begin()); // delete first element
                     }
                 }
-                
+
                 time_2 = clock();
                 label = format("Outputting: %7.2f ms", ((float) time_2 - time_1)/CLOCKS_PER_SEC*1000);
                 std::cout << label << std::endl << "Output: " << outputFile << std::endl;
 
             }
         }
+        catch (const std::exception& e) // Catch specific exceptions
+        {
+             std::cerr << "Error: " << e.what() << std::endl; // Use cerr for errors
+        }
         catch (...)
         {
-            std::cout << "Could not process the input image" << std::endl;
+            std::cerr << "Could not process the input image due to an unknown error" << std::endl; // Use cerr for errors
         }
-        
+
         // sleep in the loop
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
@@ -206,7 +213,7 @@ int main()
 
 
 // Remove the bounding boxes with low confidence using non-maxima suppression
-bool postprocess(Mat &frame, const std::vector<Mat> &outs, const std::string& interestClass)
+bool postprocess(Mat &frame, const std::vector<Mat> &outs, const std::vector<std::string>& interestClasses) // Changed signature
 {
     std::vector<int> classIds;
     std::vector<float> confidences;
@@ -251,8 +258,12 @@ bool postprocess(Mat &frame, const std::vector<Mat> &outs, const std::string& in
         Rect box = boxes[idx];
         drawPred(classIds[idx], confidences[idx], box.x, box.y,
                  box.x + box.width, box.y + box.height, frame);
-        if ( classes[classIds[idx]] == interestClass ) {
+
+        // Check if the detected class is in the list of interest classes
+        const std::string& detectedClass = classes[classIds[idx]];
+        if (std::find(interestClasses.begin(), interestClasses.end(), detectedClass) != interestClasses.end()) {
             ObjectOfInterest = true;
+            // Optionally break here if finding one is enough: break;
         }
     }
     return ObjectOfInterest;
@@ -268,7 +279,7 @@ void drawPred(int classId, float conf, int left, int top, int right, int bottom,
     std::string label = format("%.2f", conf);
     if (!classes.empty())
     {
-        CV_Assert(classId < (int)classes.size());
+        CV_Assert(classId >= 0 && classId < (int)classes.size()); // Add boundary check
         label = classes[classId] + ":" + label;
     }
 
@@ -276,9 +287,12 @@ void drawPred(int classId, float conf, int left, int top, int right, int bottom,
     int baseLine;
     Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.3, 1, &baseLine);
     top = max(top, labelSize.height);
-    rectangle(frame, Point(left, top - round(1.5 * labelSize.height)), 
-                     Point(left + round(1.5 * labelSize.width), top + baseLine), 
-                     Scalar(255, 255, 255), FILLED);
+    // Ensure the label background doesn't go out of bounds
+    int label_right = left + round(1.5 * labelSize.width);
+    int label_bottom = top + baseLine;
+    rectangle(frame, Point(left, top - round(1.5 * labelSize.height)),
+                   Point(label_right, label_bottom),
+                   Scalar(255, 255, 255), FILLED);
     putText(frame, label, Point(left, top), FONT_HERSHEY_SIMPLEX, 0.45, Scalar(0, 0, 0), 1);
 }
 
