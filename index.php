@@ -52,10 +52,10 @@
 
         echo $json;
         
-//         bring up machine learning inference (YOLO) if the inference process is not already on
-//         if (strpos(strval(shell_exec('ps -A')),'inference-sub') === false) {
-//             $full_output = shell_exec('nohup python3 /var/www/panyuxin.com/yolo/yolo.py > /dev/null 2>&1 &');
-//         }
+        // bring up machine learning inference (YOLO) if the inference process is not already on
+        // if (strpos(strval(shell_exec('ps -A')),'inference-sub') === false) {
+        //     $full_output = shell_exec('nohup python3 /var/www/panyuxin.com/yolo/yolo.py > /dev/null 2>&1 &');
+        // }
 
         die();
     }
@@ -70,77 +70,130 @@
 <link rel="stylesheet" href="assets/custom.css">
 
 <style>
-    h1, h2, h3, h4, h5, h6 {
-        padding:0;
-        margin:0;
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #fafafa;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #333;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+    padding: 0;
+    font-weight: 600;
+  }
+
+  .button-group,
+  .play-area {
+    margin: 2em auto;
+    max-width: 800px;
+    background-color: #ededed;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 1em;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  .button,
+  .btn {
+    display: inline-block;
+    margin-right: 1em;
+    padding: 0.65em 1.4em;
+    font-size: 1em;
+    font-weight: 500;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background-color: #fff;
+    color: #333;
+    cursor: pointer;
+    text-decoration: none;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .button:hover,
+  .btn:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+  }
+  .button:active,
+  .btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  .button:focus,
+  .btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(170, 170, 170, 0.3);
+  }
+
+  .play-area-sub {
+    display: inline-block;
+    vertical-align: top;
+    padding: 0.01em 0.01%;
+    /* width: 47%; */
+  }
+
+  #capture {
+    display: none;
+  }
+  #snapshot {
+    display: none;
+  }
+
+  .slidecontainer {
+      width: 100%;
+      margin: 1em auto;
+      max-width: 800px;
+  }
+
+  .slider {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 15px;
+      border-radius: 5px;
+      background: #d3d3d3;
+      outline: none;
+      opacity: 0.7;
+      transition: opacity .2s;
+      margin-top: 1em;
     }
 
-    .button-group, .play-area {
-      border: 1px solid grey;
-      padding: 0.5em 0.5%;
-      margin-bottom: 1em;
+  .slider:hover {
+      opacity: 1;
+  }
+
+  .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      background: #4CAF50;
+      cursor: pointer;
+  }
+
+  .slider::-moz-range-thumb {
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      background: #4CAF50;
+      cursor: pointer;
+  }
+
+    #metricFrameRate,
+    #metricBitRate {
+      font-weight: bold;
+      color: #11998e;
+      font-size: 1.15em;
     }
 
-    .button {
-      padding: 0.5em;
-      margin-right: 1em;
+    #timestampIndicator {
+      margin-top: 0.75em;
+      font-size: 0.9em; 
+      color: #666;
+      font-style: italic;
     }
 
-    .play-area-sub {
-      /*width: 47%;*/
-      padding: 0.01em 0.01%;
-      display: inline-block;
-      /*text-align: center;*/
-    }
-
-    #capture {
-      display: none;
-    }
-
-    #snapshot {
-      display: none;
-      /*width: 300px;
-      height: 300px;*/
-    }
-</style>
-<style>  /* range slider */
-    .slidecontainer {
-        width: 100%;
-    }
-
-    .slider {
-        -webkit-appearance: none;
-        width: 100%;
-        height: 15px;
-        border-radius: 5px;
-        background: #d3d3d3;
-        outline: none;
-        opacity: 0.7;
-        -webkit-transition: .2s;
-        transition: opacity .2s;
-    }
-
-    .slider:hover {
-        opacity: 1;
-    }
-
-    .slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 25px;
-        height: 25px;
-        border-radius: 50%;
-        background: #4CAF50;
-        cursor: pointer;
-    }
-
-    .slider::-moz-range-thumb {
-        width: 25px;
-        height: 25px;
-        border-radius: 50%;
-        background: #4CAF50;
-        cursor: pointer;
-    }
 </style>
 <body>
 
@@ -365,6 +418,8 @@ function startUploading() {
 
 function captureSnapshot() {
 
+    let displayRounding = 1;
+
     if(cameraStream != null) {
 
         let ctx = capture.getContext( '2d' );
@@ -404,7 +459,7 @@ function captureSnapshot() {
                     if (logTimestamp.length>logLength){
                         logTimestamp.shift(); // Remove an item from the beginning of an array
                         logTimeSpan = (logTimestamp[logTimestamp.length-1]-logTimestamp[0])/1000;
-                        metricFrameRate.innerHTML = (logTimestamp.length/logTimeSpan).toFixed(2);
+                        metricFrameRate.innerHTML = (logTimestamp.length/logTimeSpan).toFixed(displayRounding);
                     }
                     
                     let res = Array.from(data.entries(), ([key, prop]) => ( // get image size (content length)
@@ -423,7 +478,7 @@ function captureSnapshot() {
                         for( let i = 0; i < logFileSize.length; i++ ){
                             sum += parseInt( logFileSize[i], 10 ); //don't forget to add the base
                         }
-                        metricBitRate.innerHTML = (sum/1000/logTimeSpan).toFixed(2);
+                        metricBitRate.innerHTML = (sum/1000/logTimeSpan).toFixed(displayRounding);
                     }
 
                     setTimeout("captureSnapshot()", 0);

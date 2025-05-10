@@ -149,39 +149,114 @@
 <link rel="stylesheet" href="assets/custom.css">
     
 <style>
-    h1, h2, h3, h4, h5, h6 {
-        padding:0;
-        margin:0;
-    }
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #fafafa;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #333;
+  }
 
-    .button-group, .play-area {
-      border: 1px solid grey;
-      padding: 0.5em 0.5%;
-      margin-bottom: 1em;
-    }
 
-    .button {
-      padding: 0.5em;
-      margin-right: 1em;
-    }
+  .button-group,
+  .play-area {
+    margin: 2em auto;
+    max-width: 800px;
+    background-color: #ededed;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 1em;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  }
 
-    .play-area-sub {
-      /*width: 47%;*/
-      padding: 0.5em 0.5%;
-      display: inline-block;
-      /*text-align: center;*/
-    }
+  .button,
+  .btn {
+    display: inline-block;
+    margin-right: 1em;
+    padding: 0.65em 1.4em;
+    font-size: 1em;
+    font-weight: 500;
+    border: 1px solid #ccc;
+    border-radius: 6px;         
+    background-color: #fff;
+    color: #333;
+    cursor: pointer;
+    text-decoration: none;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
 
-    #capture {
-      display: none;
-    }
+  .button:hover,
+  .btn:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+  }
 
-    #snapshot {
-      display: inline-block;
-      /*width: 300px;
-      height: 300px;*/
-    }
+  .button:active,
+  .btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
 
+  .button:focus,
+  .btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(170, 170, 170, 0.3);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+    padding: 0;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .play-area-sub {
+    display: inline-block;
+    vertical-align: top;
+    padding: 0.5em;
+  }
+
+  #capture {
+    display: none;
+  }
+
+  #snapshot {
+    display: inline-block;
+    margin-top: 0.5em;
+  }
+
+  #snapshot img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+
+  #timestampIndicator {
+    margin-top: 0.75em;
+    font-size: 0.9em; 
+    color: #666;
+    font-style: italic;
+  }
+
+  table {
+    margin: 1em auto 0 auto;
+    border-collapse: collapse;
+    text-align: center;
+    font-size: 1.05em;
+    color: #555;
+  }
+
+  table td {
+    padding: 0.3em 1em;
+  }
+
+  #metricFrameRate,
+  #metricBitRate {
+    font-weight: 700;
+    color: #11998e;
+    font-size: 1.15em;
+  }
 </style>
 
 <body>
@@ -365,6 +440,7 @@ function preloadImage(img, resp, anImageLoadedCallback){ // download image from 
 // view stream
 function viewStream() {
 
+    let displayRounding = 1;
     let request = new XMLHttpRequest();
     request.open( "GET", "view.php?act=view&f="+String(currentFileTimestamp), async=true );
     request.timeout = xhrTimeout; // time in milliseconds
@@ -415,7 +491,7 @@ function viewStream() {
                         }
                         let logTimeSpan = (logTimestamp[logTimestamp.length - 1] - logTimestamp[0]) / 1000;
                         if (logTimeSpan>0) {
-                            metricFrameRate.innerHTML = (logTimestamp.length / logTimeSpan).toFixed(2);
+                            metricFrameRate.innerHTML = (logTimestamp.length / logTimeSpan).toFixed(displayRounding);
                         }
 
                         logFileSize.push(resp.size/1000+emptyTransferSize);
@@ -429,7 +505,7 @@ function viewStream() {
                             sum += parseInt( logFileSize[i], 10 ); //don't forget to add the base
                         }
                         if (logTimeSpan>0) {
-                            metricBitRate.innerHTML = (sum / logTimeSpan).toFixed(2);
+                            metricBitRate.innerHTML = (sum / logTimeSpan).toFixed(displayRounding);
                         }
                         setTimeout("viewStream()", 0);
 
