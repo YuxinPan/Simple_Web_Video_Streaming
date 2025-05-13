@@ -1,0 +1,15 @@
+# Set the default behavior for all files
+* text=auto
+
+# Tell GitHub/Linguist to ignore these files
+.github/* linguist-vendored=true
+devskim.yml linguist-vendored=true
+
+# Handle binary files
+*.jpg binary
+*.jpeg binary
+*.png binary
+
+# Handle large files
+*.weights binary
+*.cfg text
