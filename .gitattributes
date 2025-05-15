@@ -4,6 +4,7 @@
 # Tell GitHub/Linguist to ignore these files
 .github/* linguist-vendored=true
 devskim.yml linguist-vendored=true
+yolov3-cpp/date/* linguist-vendored=true
 
 # Handle binary files
 *.jpg binary
